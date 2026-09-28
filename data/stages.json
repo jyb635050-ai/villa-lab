@@ -1,0 +1,11 @@
+[
+ {"id":"site","name":{"zh":"放线","en":"Site layout"},"desc":{"zh":"测量地块、钉桩、拉线，标出退界。","en":"Survey the lot, set stakes and strings, mark setbacks."}},
+ {"id":"excavation","name":{"zh":"开挖","en":"Excavation"},"desc":{"zh":"按基础位置挖坑、挖槽。","en":"Dig pits and trenches where the footings go."}},
+ {"id":"footing","name":{"zh":"基础","en":"Footings"},"desc":{"zh":"每根柱下浇一块独立基础。","en":"An isolated footing pad under every column."}},
+ {"id":"column","name":{"zh":"一层柱","en":"Columns"},"desc":{"zh":"柱从基础长出来，地梁把各柱底部连成一体。","en":"Columns rise from the pads; foundation beams tie them together."}},
+ {"id":"slab","name":{"zh":"梁板","en":"Beams & slabs"},"desc":{"zh":"一层地坪、二层梁板、二层柱和楼梯。","en":"Ground slab, 2nd-floor beams and slab, upper columns, stairs."}},
+ {"id":"wall","name":{"zh":"砌墙","en":"Walls"},"desc":{"zh":"空心砖/加气砖砌筑，留门窗洞。","en":"CHB / AAC masonry with door and window openings."}},
+ {"id":"roof","name":{"zh":"屋顶","en":"Roof"},"desc":{"zh":"屋架、檩条、屋面，锚固要抗台风。","en":"Trusses, purlins and roofing, tied down against typhoons."}},
+ {"id":"pool","name":{"zh":"泳池","en":"Pool"},"desc":{"zh":"下沉式钢筋混凝土池壳、防水、贴砖。","en":"In-ground RC shell, waterproofing and tiles."}},
+ {"id":"finish","name":{"zh":"装修","en":"Finishes"},"desc":{"zh":"墙面材料、地面、门窗全部到位。","en":"Wall finishes, flooring, doors and windows in place."}}
+]

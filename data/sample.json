@@ -1,0 +1,43 @@
+{
+ "v": 1,
+ "lot": {"w": 24, "d": 32},
+ "floors": [{"h": 3}, {"h": 3}],
+ "walls": [
+  {"id": "g1", "floor": 0, "a": [4, 6], "b": [18, 6], "material": "chb-6"},
+  {"id": "g2", "floor": 0, "a": [18, 6], "b": [18, 16], "material": "chb-6"},
+  {"id": "g3", "floor": 0, "a": [18, 16], "b": [4, 16], "material": "chb-6"},
+  {"id": "g4", "floor": 0, "a": [4, 16], "b": [4, 6], "material": "chb-6"},
+  {"id": "g5", "floor": 0, "a": [11, 6], "b": [11, 11], "material": "chb-4"},
+  {"id": "g6", "floor": 0, "a": [4, 11], "b": [11, 11], "material": "chb-4"},
+  {"id": "f1", "floor": 1, "a": [4, 6], "b": [16, 6], "material": "chb-6"},
+  {"id": "f2", "floor": 1, "a": [16, 6], "b": [16, 14], "material": "chb-6"},
+  {"id": "f3", "floor": 1, "a": [16, 14], "b": [4, 14], "material": "chb-6"},
+  {"id": "f4", "floor": 1, "a": [4, 14], "b": [4, 6], "material": "chb-6"},
+  {"id": "f5", "floor": 1, "a": [10, 6], "b": [10, 14], "material": "chb-4"},
+  {"id": "f6", "floor": 1, "a": [4, 10], "b": [10, 10], "material": "chb-4"}
+ ],
+ "openings": [
+  {"id": "o1", "wall": "g1", "type": "window", "at": 3, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o2", "wall": "g1", "type": "door", "at": 9, "w": 0.9, "h": 2.1, "sill": 0},
+  {"id": "o3", "wall": "g1", "type": "window", "at": 11.5, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o4", "wall": "g2", "type": "window", "at": 5, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o5", "wall": "g3", "type": "door", "at": 4, "w": 2.4, "h": 2.1, "sill": 0},
+  {"id": "o6", "wall": "g3", "type": "window", "at": 10, "w": 2, "h": 1.5, "sill": 0.6},
+  {"id": "o7", "wall": "g4", "type": "window", "at": 2.5, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o8", "wall": "g4", "type": "window", "at": 7.5, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o9", "wall": "g5", "type": "door", "at": 3, "w": 0.9, "h": 2.1, "sill": 0},
+  {"id": "o10", "wall": "g6", "type": "door", "at": 5, "w": 0.9, "h": 2.1, "sill": 0},
+  {"id": "o11", "wall": "f1", "type": "window", "at": 3, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o12", "wall": "f1", "type": "window", "at": 9, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o13", "wall": "f2", "type": "window", "at": 4, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o14", "wall": "f3", "type": "window", "at": 3, "w": 2, "h": 1.5, "sill": 0.6},
+  {"id": "o15", "wall": "f3", "type": "window", "at": 9, "w": 2, "h": 1.5, "sill": 0.6},
+  {"id": "o16", "wall": "f4", "type": "window", "at": 2, "w": 1.2, "h": 1.2, "sill": 0.9},
+  {"id": "o17", "wall": "f5", "type": "door", "at": 6, "w": 0.9, "h": 2.1, "sill": 0},
+  {"id": "o18", "wall": "f6", "type": "door", "at": 3.5, "w": 0.9, "h": 2.1, "sill": 0}
+ ],
+ "pool": {"x": 6, "z": 19.5, "w": 10, "d": 4, "depth": 1.5, "material": "pool-porcelain"},
+ "stairs": {"floor": 0, "x": 11.5, "z": 6.5, "w": 1.2, "d": 4},
+ "roof": {"type": "hip", "material": "clay-tile"},
+ "floor": {"material": "porcelain-tile"}
+}

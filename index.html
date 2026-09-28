@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Villa Lab · DIY 别墅建房学习与 3D 设计</title>
+<meta name="description" content="从地基开始系统学盖房，在 3D 里设计两层泳池别墅，实时算出用量与菲律宾参考造价。">
+<meta name="theme-color" content="#eef3f8">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="css/app.css">
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js"}}</script>
+<link rel="modulepreload" href="vendor/three/three.module.js">
+<link rel="modulepreload" href="vendor/three/three.core.js">
+<link rel="modulepreload" href="js/scene.js">
+</head>
+<body>
+<header class="topbar glass" data-glass id="topbar">
+  <a class="brand" href="#/"><img src="assets/icon.svg" alt="" width="26" height="26"><span data-i18n="brand">Villa Lab</span></a>
+  <nav><a href="#/" data-i18n="navLearn">学习</a><a href="#/design" data-i18n="navDesign">设计</a><a href="#/boq" data-i18n="navBoq">造价</a><a href="#/sources" data-i18n="navSources">出处</a></nav>
+  <button class="lang" id="lang" data-testid="lang">EN</button>
+</header>
+<main id="app"><div class="boot"><div class="spinner"></div></div></main>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
