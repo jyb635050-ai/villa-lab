@@ -41,6 +41,17 @@ export function groundSlabOf(d) {
   if (d.pool && d.pool.x < b[2] && d.pool.x + d.pool.w > b[0]) z2 = Math.max(b[3], Math.min(z2, d.pool.z - 0.5));
   return { house: b, terrace: z2 > b[3] ? [b[0], b[3], b[2], z2] : null };
 }
+// 楼梯洞：楼梯在二层楼板范围内时，二层楼板在楼梯上方开洞
+export function stairHole(d) {
+  const b = slab1Of(d), s = d.stairs; if (!b || !s) return null;
+  const r = [Math.max(b[0], s.x), Math.max(b[1], s.z), Math.min(b[2], s.x + s.w), Math.min(b[3], s.z + s.d)];
+  return r[2] - r[0] > 0.3 && r[3] - r[1] > 0.3 ? r : null;
+}
+// 矩形挖掉一个洞，剩下最多 4 块矩形
+export function rectMinus(r, h) {
+  if (!h) return [r];
+  return [[r[0], r[1], r[2], h[1]], [r[0], h[3], r[2], r[3]], [r[0], h[1], h[0], h[3]], [h[2], h[1], r[2], h[3]]].filter(q => q[2] - q[0] > 1e-6 && q[3] - q[1] > 1e-6);
+}
 // 二层楼板：有二层墙时，盖住一、二层墙的总范围（一层多出来的部分成为二楼露台）
 export function slab1Of(d) { return d.walls.some(w => w.floor === 1) ? bboxOf(d.walls) : null; }
 const area = r => (r ? (r[2] - r[0]) * (r[3] - r[1]) : 0);
@@ -70,7 +81,7 @@ export function boq(d, mats) {
   const g = groundSlabOf(d);
   if (g) { const a0 = area(g.house) + area(g.terrace); concrete += a0 * F.slab0; add('gravel-g1', a0 * F.slab0); add(d.floor.material, a0); }
   const b1 = slab1Of(d);
-  if (b1) { concrete += area(b1) * F.slab1; add(d.floor.material, area(b1)); }
+  if (b1) { const a1 = area(b1) - area(stairHole(d)); concrete += a1 * F.slab1; add(d.floor.material, a1); }
   // 屋顶
   const bt = bboxOf(d.walls.filter(w => w.floor === topFloor(d)));
   if (bt) {

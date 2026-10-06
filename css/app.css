@@ -150,6 +150,28 @@ tfoot td{border:0;font-size:17px;padding-top:14px}
 .texlist{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
 .texlist li{display:flex;align-items:center;gap:8px}.texlist img{width:36px;height:36px;border-radius:8px}
 
+/* 第一人称参观 */
+.walk{position:fixed;inset:0}
+.walk .stage canvas{cursor:crosshair}
+.crosshair{position:absolute;z-index:5;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;pointer-events:none}
+.crosshair::before,.crosshair::after{content:"";position:absolute;background:rgba(255,255,255,.95);box-shadow:0 0 2px rgba(0,0,0,.6)}
+.crosshair::before{left:8px;top:0;width:2px;height:18px}.crosshair::after{top:8px;left:0;height:2px;width:18px}
+.aimtip{position:absolute;z-index:6;left:50%;top:calc(50% + 26px);transform:translate(-50%,6px);padding:6px 14px;border-radius:99px;background:rgba(29,29,31,.78);color:#fff;font-size:14px;font-weight:600;opacity:0;transition:all .2s var(--ease);pointer-events:none}
+.aimtip.on{opacity:1;transform:translate(-50%,0)}
+.whud{position:absolute;z-index:10;left:12px;bottom:12px;width:min(360px,calc(100% - 24px));padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.row.between{justify-content:space-between}
+.where{font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:99px;background:rgba(0,113,227,.12);color:var(--accent)}
+.keys{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px;color:var(--ink2)}
+kbd{display:inline-block;min-width:20px;padding:1px 6px;margin-right:2px;border-radius:6px;background:#fff;border:1px solid rgba(0,0,0,.12);box-shadow:0 1px 0 rgba(0,0,0,.12);font:600 11.5px/1.5 var(--font);color:var(--ink);text-align:center}
+.wstart{position:absolute;z-index:20;inset:0;display:grid;place-items:center;background:rgba(10,20,30,.18);transition:opacity .3s var(--ease)}
+.wstart.hide{opacity:0;pointer-events:none}
+.wstart .card{max-width:420px;margin:16px;padding:26px;text-align:center}.wstart .card b{font-size:22px}.wstart .card p{color:#3a3a3c}
+.joy{position:absolute;z-index:12;left:24px;bottom:150px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.6);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);touch-action:none}
+.joy i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.tbtns{position:absolute;z-index:12;right:18px;bottom:160px;display:flex;flex-direction:column;gap:12px}
+.tbtns button{width:76px;height:76px;border-radius:50%;font-weight:700;background:rgba(255,255,255,.75);touch-action:none}
+.walkbtn{color:var(--accent)}
+
 /* 手机 */
 @media (max-width:759px){
   .topbar{gap:8px;padding:0 6px 0 10px}.brand span{display:none}.topbar nav a{padding:6px 8px;font-size:13.5px}
@@ -167,6 +189,7 @@ tfoot td{border:0;font-size:17px;padding-top:14px}
   .tldock{order:2}.dock{order:1}.insp{order:3}
   .ticks span{display:none}.ticks span.on{display:block;text-align:center}
   .hint{display:none}
+  .walk .whud{bottom:auto;top:70px}
   .hero{height:78vh;min-height:520px}
   .herocard{top:auto;bottom:16px;transform:none;left:12px;width:calc(100% - 24px);padding:22px}
   .sheet{padding:18px}

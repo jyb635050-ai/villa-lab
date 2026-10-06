@@ -31,10 +31,19 @@ const S = {
   boqTitle: ['用量与参考造价', 'Quantities & reference cost'], boqSub: ['按你当前的设计实时计算。', 'Computed live from your current design.'],
   colMat: ['材料', 'Material'], colQty: ['用量', 'Quantity'], colPrice: ['单价', 'Unit price'], colCost: ['小计', 'Subtotal'], colBasis: ['价格口径', 'Basis'],
   basisMaterial: ['材料', 'Material'], basisInstalled: ['含安装', 'Installed'], total: ['合计', 'Total'], poolWater: ['泳池水量', 'Pool water'],
-  disclaimer: ['以上是按公开网页（2026 年）整理的参考价，不是报价。大多数是材料价；屋面、屋架、防水三类来源只给了「供货+安装」价，已在「价格口径」列标出。不含：人工（其余各项）、设计费、报建费、土方、水电材料、运费和地区差价。结构尺寸是示意，以结构工程师的设计为准。', 'Reference prices compiled from public web pages (2026) — not a quotation. Most lines are material prices; roofing, trusses and waterproofing were only published as supplied-and-installed and are marked in the Basis column. Excludes labour (other lines), design, permit fees, earthworks, MEP materials, delivery and regional mark-ups. Structural sizes are illustrative — your structural engineer decides.'],
+  disclaimer: ['以上是按公开网页（2026 年）整理的参考价，不是报价。大多数是材料价；屋面、屋架、防水三类来源只给了「供货+安装」价，已在「价格口径」列标出。不含：人工（其余各项）、设计费、报建费、土方、水电材料、运费和地区差价；3D 里的家具、栏杆、天花板只是示意，不计价。结构尺寸是示意，以结构工程师的设计为准。', 'Reference prices compiled from public web pages (2026) — not a quotation. Most lines are material prices; roofing, trusses and waterproofing were only published as supplied-and-installed and are marked in the Basis column. Excludes labour (other lines), design, permit fees, earthworks, MEP materials, delivery and regional mark-ups; furniture, railings and ceilings in 3D are illustrative and not priced. Structural sizes are illustrative — your structural engineer decides.'],
   method: ['怎么算的', 'How it is calculated'], empty: ['设计里还没有东西。', 'The design is empty.'],
   srcTitle: ['出处', 'Sources'], srcPrices: ['价格原文', 'Price quotes'], srcLessons: ['课程出处', 'Course sources'], srcTex: ['贴图（Poly Haven，CC0）', 'Textures (Poly Haven, CC0)'], srcCode: ['代码', 'Code'],
   fetched: ['{d} 取价', 'priced {d}'],
+  navWalk: ['参观', 'Walk'], walkShort: ['参观', 'Walk'], walkEnter: ['第一人称参观', 'Walk through'], walkTitle: ['第一人称参观', 'Walk-through'],
+  walkMove: ['走动', 'move'], walkSpace: ['空格', 'Space'], walkJump: ['跳', 'Jump'], walkDoor: ['开门', 'door'], walkRun: ['跑', 'run'], walkMouse: ['鼠标：看四周', 'Mouse: look'], walkEsc: ['放开鼠标', 'free mouse'],
+  walkTouch: ['左下摇杆走动 · 右边拖动看四周 · 按钮跳和开门', 'Left stick to move · drag right side to look · buttons to jump and open doors'],
+  walkExit: ['回设计器', 'Back to designer'], walkRespawn: ['回到门口', 'Back to the door'],
+  walkStart: ['从院子出发，走到门前按 F 开门，进屋逛一楼，再顺着楼梯上二楼。', 'Start in the yard, press F at the front door, explore the ground floor, then take the stairs up.'],
+  walkEmpty: ['设计里还没有房子，先去设计器画几面墙，或载入示范别墅。', 'There is no house yet — draw some walls or load the sample villa first.'],
+  walkGo: ['点击开始（锁定鼠标）', 'Click to start (locks the mouse)'], walkGoTouch: ['开始参观', 'Start'],
+  walkYard: ['院子', 'Yard'], walkF1: ['一楼', 'Ground floor'], walkF2: ['二楼', 'Upper floor'], walkPool: ['泳池里', 'In the pool'],
+  walkAimOpen: ['按 F 开门', 'Press F to open'], walkAimClose: ['按 F 关门', 'Press F to close'], walkOpened: ['门开了', 'Door opened'], walkClosed: ['门关了', 'Door closed'],
 };
 export let lang = 'zh';
 export function setLang(l) { lang = l === 'en' ? 'en' : 'zh'; }

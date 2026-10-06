@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from '../vendor/three/addons/OrbitControls.js';
 import { RoomEnvironment } from '../vendor/three/addons/RoomEnvironment.js';
-import { F, wlen, bboxOf, columnsOf, topFloor, groundSlabOf, slab1Of } from './boq.js';
+import { F, wlen, bboxOf, columnsOf, topFloor, groundSlabOf, slab1Of, stairHole, rectMinus } from './boq.js';
+import { furnish } from './interior.js';
 
 const ease = t => 1 - Math.pow(1 - t, 3);
 const STAGES = ['site', 'excavation', 'footing', 'column', 'slab', 'wall', 'roof', 'pool', 'finish'];
@@ -29,6 +30,24 @@ function faceGeo(pts, m = 1) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2)); g.setIndex(idx); g.computeVertexNormals(); return g;
 }
 
+// 栏杆：二层楼板外沿没被二层墙挡住的边 + 楼梯洞除上楼口以外的三边
+export function railingsOf(d) {
+  const b = slab1Of(d); if (!b) return [];
+  const out = [], w1 = d.walls.filter(w => w.floor === 1), off = 0.1;
+  const edges = [[b[0], b[1], b[2], b[1], 0, -1], [b[0], b[3], b[2], b[3], 0, 1], [b[0], b[1], b[0], b[3], -1, 0], [b[2], b[1], b[2], b[3], 1, 0]];
+  for (const [x0, z0, x1, z1, ox, oz] of edges) {
+    const xa = z0 === z1, line = xa ? z0 : x0, lo = xa ? x0 : z0, hi = xa ? x1 : z1;
+    const cov = w1.filter(w => (xa ? w.a[1] === w.b[1] && w.a[1] === line : w.a[0] === w.b[0] && w.a[0] === line)).map(w => xa ? [Math.min(w.a[0], w.b[0]), Math.max(w.a[0], w.b[0])] : [Math.min(w.a[1], w.b[1]), Math.max(w.a[1], w.b[1])]).sort((p, q) => p[0] - q[0]);
+    let t = lo;
+    const seg = (u, v) => { if (v - u > 0.3) out.push(xa ? [u, line + oz * off, v, line + oz * off] : [line + ox * off, u, line + ox * off, v]); };
+    for (const [u, v] of cov) { seg(t, Math.min(u, hi)); t = Math.max(t, v); }
+    seg(t, hi);
+  }
+  const h = stairHole(d);
+  if (h) { const up = d.stairs.up === '-z'; out.push([h[0], h[1], h[0], h[3]], [h[2], h[1], h[2], h[3]]); out.push(up ? [h[0], h[3], h[2], h[3]] : [h[0], h[1], h[2], h[1]]); }
+  return out;
+}
+
 export class Viewer {
   constructor() {
     const c = this.canvas = document.createElement('canvas'); c.dataset.testid = 'canvas';
@@ -52,6 +71,7 @@ export class Viewer {
     const loop = () => {
       requestAnimationFrame(loop);
       const now = performance.now(); let busy = false;
+      if (this.onTick && this.onTick(Math.min(0.05, (now - (this.lastT || now)) / 1000))) busy = true; this.lastT = now;
       this.anims = this.anims.filter(a => { const k = Math.min(1, (now - a.t0) / a.dur); a.fn(ease(k)); busy = true; return k < 1; });
       if (this.controls.enabled && this.controls.update()) busy = true;
       if (busy || this.dirty) { this.dirty = false; r.render(s, this.cam); }
@@ -77,7 +97,7 @@ export class Viewer {
 
   // ───── 搭场景 ─────
   build(d, stage, o = {}) {
-    const prev = this.stageShown; this.stageShown = stage; this.lot = d.lot;
+    const prev = this.stageShown; this.stageShown = stage; this.lot = d.lot; this.doors = new Map();
     this.root.traverse(x => { if (x.geometry) x.geometry.dispose(); });
     this.scene.remove(this.root); this.root = new THREE.Group(); this.scene.add(this.root);
     const groups = STAGES.map(() => { const g = new THREE.Group(); this.root.add(g); return g; });
@@ -135,10 +155,14 @@ export class Viewer {
         if (at('finish')) add(G('finish'), boxGeo(r[2] - r[0], 0.01, r[3] - r[1], this.texM(d.floor.material)), this.mat(d.floor.material), (r[0] + r[2]) / 2, F.slab0 + 0.005, (r[1] + r[3]) / 2, { part: 'floor' });
       }
       if (b1 && !(plan && pf === 0)) {
-        add(G('slab'), boxGeo(b1[2] - b1[0] + F.col, F.slab1, b1[3] - b1[1] + F.col), fade(1) ? this.plain(0xb8b6ae, { op: 0.3 }) : concrete, (b1[0] + b1[2]) / 2, h0 - F.slab1 / 2, (b1[1] + b1[3]) / 2, { part: 'slab1' });
-        if (at('finish') && !plan) add(G('finish'), boxGeo(b1[2] - b1[0], 0.01, b1[3] - b1[1], this.texM(d.floor.material)), this.mat(d.floor.material), (b1[0] + b1[2]) / 2, h0 + 0.005, (b1[1] + b1[3]) / 2, { part: 'floor' });
+        const hole = stairHole(d), half = F.col / 2;
+        for (const r of rectMinus([b1[0] - half, b1[1] - half, b1[2] + half, b1[3] + half], hole)) add(G('slab'), boxGeo(r[2] - r[0], F.slab1, r[3] - r[1]), fade(1) ? this.plain(0xb8b6ae, { op: 0.3 }) : concrete, (r[0] + r[2]) / 2, h0 - F.slab1 / 2, (r[1] + r[3]) / 2, { part: 'slab1' });
+        if (at('finish') && !plan) for (const r of rectMinus(b1, hole)) {
+          add(G('finish'), boxGeo(r[2] - r[0], 0.01, r[3] - r[1], this.texM(d.floor.material)), this.mat(d.floor.material), (r[0] + r[2]) / 2, h0 + 0.005, (r[1] + r[3]) / 2, { part: 'floor' });
+          add(G('finish'), boxGeo(r[2] - r[0], 0.01, r[3] - r[1]), this.plain(0xf6f4ef), (r[0] + r[2]) / 2, h0 - F.slab1 - 0.006, (r[1] + r[3]) / 2, { part: 'ceiling' }).castShadow = false;
+        }
       }
-      if (d.stairs && !hideF(0)) { const s = d.stairs, n = 16; for (let i = 0; i < n; i++) add(G('slab'), boxGeo(s.w, (i + 1) * h0 / n, s.d / n), this.plain(0xd9d3c7), s.x + s.w / 2, (i + 1) * h0 / n / 2, s.z + (i + 0.5) * s.d / n, { part: 'stairs' }); }
+      if (d.stairs && !hideF(0)) { const s = d.stairs, n = 16, up = s.up === '-z'; for (let i = 0; i < n; i++) add(G('slab'), boxGeo(s.w, (i + 1) * h0 / n, s.d / n), this.plain(0xd9d3c7), s.x + s.w / 2, (i + 1) * h0 / n / 2, up ? s.z + s.d - (i + 0.5) * s.d / n : s.z + (i + 0.5) * s.d / n, { part: 'stairs' }); }
     }
     // 墙（留洞）+ 装修阶段的门窗
     if (at('wall')) for (const w of d.walls) {
@@ -147,20 +171,29 @@ export class Viewer {
       const mat = fade(w.floor) ? this.mat(w.material, { fade: 1 }) : this.mat(w.material, sel ? { sel: 1 } : {});
       const base = y0(w.floor) + (w.floor ? 0 : F.slab0), top = y0(w.floor) + d.floors[w.floor].h - F.beam[1], L = wlen(w), ud = { wall: w.id, part: 'wall' };
       const ops = d.openings.filter(x => x.wall === w.id).sort((a, b) => a.at - b.at); let t = 0;
+      // 装修阶段：室内一侧刷白（外墙只刷朝里的一面，内隔墙两面都刷；不成围合的墙不刷）
+      const xAx = Math.abs(w.b[0] - w.a[0]) > 0, fb = bboxOf(d.walls.filter(x => x.floor === w.floor));
+      const nz = xAx ? [0, 1] : [1, 0]; let sides = [];
+      if (fb && at('finish') && !plan) { const c = xAx ? w.a[1] : w.a[0], lo = xAx ? fb[1] : fb[0], hi = xAx ? fb[3] : fb[2]; sides = c === lo ? [1] : c === hi ? [-1] : [1, -1]; }
+      const paint = this.plain(0xf1eee7, { r: 0.95 });
+      const piece = (t0, t1, y, hgt) => {
+        alongBox(G('wall'), w, t0, t1, y, hgt, th, mat, tm, ud);
+        for (const sg of sides) { const me = alongBox(G('finish'), w, t0, t1, y, hgt, 0.012, paint, 1, ud); if (me) { me.position.x += nz[0] * sg * (th / 2 + 0.007); me.position.z += nz[1] * sg * (th / 2 + 0.007); me.castShadow = false; } }
+      };
       for (const op of ops) {
         const s0 = Math.max(0, op.at - op.w / 2), s1 = Math.min(L, op.at + op.w / 2), ob = y0(w.floor) + op.sill, ot = Math.min(top, ob + op.h);
-        alongBox(G('wall'), w, t, s0, base, top - base, th, mat, tm, ud);
-        alongBox(G('wall'), w, s0, s1, base, ob - base, th, mat, tm, ud);
-        alongBox(G('wall'), w, s0, s1, ot, top - ot, th, mat, tm, ud);
+        piece(t, s0, base, top - base);
+        piece(s0, s1, base, ob - base);
+        piece(s0, s1, ot, top - ot);
         if (at('finish') && !plan) {
           if (op.type === 'window') {
             const gl = alongBox(G('finish'), w, s0, s1, ob, ot - ob, 0.03, this.plain(0x9fd0f0, { op: 0.45, r: 0.05, metal: 0.2 }), 1, ud); if (gl) gl.castShadow = false;
             alongBox(G('finish'), w, s0, s1, ob - 0.04, 0.05, th + 0.06, this.plain(0x55595e, { r: 0.4, metal: 0.5 }), 1, ud);
-          } else alongBox(G('finish'), w, s0 + 0.03, s1 - 0.03, ob, ot - ob, 0.05, op.w > 1.5 ? this.plain(0x9fd0f0, { op: 0.45, r: 0.05 }) : this.plain(0x8a5a36, { r: 0.6 }), 1, ud);
+          } else this.door(G('finish'), w, op, s0, s1, ob, ot, th, fb, o.doorOpen && o.doorOpen[op.id]);
         }
         t = s1;
       }
-      alongBox(G('wall'), w, t, L, base, top - base, th, mat, tm, ud);
+      piece(t, L, base, top - base);
     }
     // 屋顶
     const tf = topFloor(d), bt = bboxOf(d.walls.filter(w => w.floor === tf));
@@ -191,6 +224,16 @@ export class Viewer {
         add(G('roof'), boxGeo(0.04, 0.2, z1 - z0), this.plain(0xeeeeea), x0, ry - 0.1, (z0 + z1) / 2, ud); add(G('roof'), boxGeo(0.04, 0.2, z1 - z0), this.plain(0xeeeeea), x1, ry - 0.1, (z0 + z1) / 2, ud);
       }
     }
+    // 装修：顶层天花、二层露台和楼梯洞栏杆、家具与院子摆设
+    if (at('finish') && !plan) {
+      if (bt && d.roof.type !== 'flat') { const ry = y0(tf) + d.floors[tf].h; add(G('finish'), boxGeo(bt[2] - bt[0], 0.02, bt[3] - bt[1]), this.plain(0xf6f4ef), (bt[0] + bt[2]) / 2, ry + 0.01, (bt[1] + bt[3]) / 2, { part: 'ceiling' }).castShadow = false; }
+      for (const [x0, z0, x1, z1] of railingsOf(d)) {
+        const L = Math.hypot(x1 - x0, z1 - z0), xa = z0 === z1, cxr = (x0 + x1) / 2, czr = (z0 + z1) / 2;
+        const gl = add(G('finish'), boxGeo(xa ? L : 0.03, 0.95, xa ? 0.03 : L), this.plain(0xbfe0f2, { op: 0.35, r: 0.05 }), cxr, h0 + 0.5, czr, { part: 'railing' }); gl.castShadow = false;
+        add(G('finish'), boxGeo(xa ? L : 0.06, 0.05, xa ? 0.06 : L), this.plain(0x55595e, { r: 0.4, metal: 0.5 }), cxr, h0 + 1.0, czr, { part: 'railing' });
+      }
+      furnish(this, G('finish'), d);
+    }
     // 泳池
     if (d.pool && (at('pool') || plan)) {
       const p = d.pool, pm = this.mat(p.material), tm = this.texM(p.material), g = G('pool'), dep = p.depth;
@@ -219,6 +262,25 @@ export class Viewer {
     this.dirty = true;
     function cx0(a) { return (a[0] + a[1]) / 2; }
   }
+  // 门扇：普通门绕门轴转向室内，宽于 1.5 m 的是推拉玻璃门
+  door(g, w, op, s0, s1, ob, ot, th, fb, open0) {
+    const L = wlen(w), ua = [(w.b[0] - w.a[0]) / L, (w.b[1] - w.a[1]) / L], slide = op.w > 1.5;
+    const hinge = [w.a[0] + ua[0] * (s0 + 0.03), w.a[1] + ua[1] * (s0 + 0.03)], L2 = s1 - s0 - 0.06, H2 = ot - ob;
+    const pivot = new THREE.Group(); pivot.position.set(hinge[0], ob, hinge[1]); const a = Math.atan2(-ua[1], ua[0]); pivot.rotation.y = a;
+    const lz = [Math.sin(a), Math.cos(a)];
+    let n = lz; if (fb) { const c = [(fb[0] + fb[2]) / 2, (fb[1] + fb[3]) / 2], mid = [hinge[0] + ua[0] * L2 / 2, hinge[1] + ua[1] * L2 / 2]; const v = [c[0] - mid[0], c[1] - mid[1]]; if (v[0] * lz[0] + v[1] * lz[1] < 0) n = [-lz[0], -lz[1]]; }
+    const sg = Math.sign(n[0] * lz[0] + n[1] * lz[1]) || 1, swing = new THREE.Group(); pivot.add(swing);
+    const mesh = new THREE.Mesh(boxGeo(L2, H2, slide ? 0.04 : 0.05), slide ? this.plain(0x9fd0f0, { op: 0.45, r: 0.05 }) : this.plain(0x8a5a36, { r: 0.6 }));
+    mesh.position.set(L2 / 2, H2 / 2, slide ? sg * (th / 2 + 0.03) : 0); mesh.castShadow = !slide; mesh.receiveShadow = true; mesh.userData = { door: op.id, wall: w.id, part: 'door' };
+    if (!slide) { const knob = new THREE.Mesh(boxGeo(0.04, 0.04, 0.14), this.plain(0xd0d3d6, { r: 0.3, metal: 0.8 })); knob.position.set(L2 - 0.08, 1.0 - H2 / 2, 0); mesh.add(knob); }
+    swing.add(mesh); g.add(pivot);
+    const rec = { id: op.id, swing, mesh, slide, sg, L2, open: 0, wall: w.id, op }; this.doors.set(op.id, rec); this.setDoor(op.id, open0 || 0);
+  }
+  setDoor(id, v) {
+    const r = this.doors.get(id); if (!r) return; r.open = v;
+    if (r.slide) r.mesh.position.x = r.L2 / 2 - v * r.L2 * 0.92; else r.swing.rotation.y = -r.sg * Math.PI / 2 * v * 0.95;
+    this.dirty = true;
+  }
   // 画图时的预览
   setGhost(gh) {
     this.ghost.traverse(x => { if (x.geometry) x.geometry.dispose(); }); this.ghost.clear();
@@ -235,6 +297,7 @@ export class Viewer {
   free() { const { W, H } = this.size(); const f = this.freeRect(); return f && f.w > 80 && f.h > 80 ? f : { x: 0, y: 0, w: W, h: H }; }
   resize() {
     const { W, H } = this.size(); this.renderer.setSize(W, H, false); this.persp.aspect = W / H;
+    if (this.cam !== this.persp && this.cam.isPerspectiveCamera) { this.cam.aspect = W / H; this.cam.updateProjectionMatrix(); }
     this.applyOffset(); if (this.view === 'plan') this.fitPlan(); this.dirty = true;
   }
   applyOffset() {

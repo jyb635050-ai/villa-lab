@@ -1,4 +1,5 @@
 import { Viewer } from './scene.js';
+import { Walker } from './walk.js';
 import { boq, FACTORS, wlen } from './boq.js';
 import { t, tr, setLang, lang } from './i18n.js';
 
@@ -16,11 +17,11 @@ const ICON = {
   door: '<rect x="6" y="3" width="12" height="18" rx="1"/><circle cx="15" cy="12" r="1"/>', window: '<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M12 5v14M4 12h16"/>',
   pool: '<rect x="3" y="7" width="18" height="10" rx="3"/><path d="M6 12c2-1.5 4 1.5 6 0s4 1.5 6 0"/>', undo: '<path d="M9 7L4 12l5 5"/><path d="M4 12h10a6 6 0 010 12"/>', redo: '<path d="M15 7l5 5-5 5"/><path d="M20 12H10a6 6 0 000 12"/>',
   cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>', plan: '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h9v8M13 4v4"/>',
-  play: '<path d="M8 5l11 7-11 7z"/>', pause: '<path d="M8 5v14M16 5v14"/>',
+  play: '<path d="M8 5l11 7-11 7z"/>', walk: '<circle cx="13" cy="4" r="2"/><path d="M9 21l3-7 3 3v5M12 14l1-6-4 2-2 4M13 8l3 3 3 1"/>', pause: '<path d="M8 5v14M16 5v14"/>',
 };
 const icon = k => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[k]}</svg>`;
 
-const D = {}; let viewer, design, past = [], future = [], current = '', lesson = null;
+const D = {}; let viewer, design, past = [], future = [], current = '', lesson = null, walker = null;
 const ui = { tool: 'select', floor: 0, selected: null, stage: 8, slot: 'wall', view: '3d', drag: null, playing: null };
 const M = id => D.mats.find(m => m.id === id);
 const lastStage = () => D.stages.length - 1;
@@ -87,6 +88,7 @@ function pageDesign(app) {
         <div class="seg"><button data-testid="floor-1" data-floor="0">${t('floor1')}</button><button data-testid="floor-2" data-floor="1">${t('floor2')}</button></div>
         <div class="seg"><button data-testid="undo" title="${t('undo')} Ctrl+Z">${icon('undo')}</button><button data-testid="redo" title="${t('redo')} Ctrl+Y">${icon('redo')}</button></div>
       </div>
+      <div class="grp"><a class="ib walkbtn" href="#/walk" title="${t('walkEnter')}">${icon('walk')}<span>${t('walkShort')}</span></a></div>
     </nav>
     <aside class="insp glass" data-glass id="insp"></aside>
     <div class="tldock glass" data-glass id="tl"><button class="play" id="play" aria-label="${t('play')}">${icon('play')}</button><div class="tlwrap"><div class="stage-cap"></div></div></div>
@@ -311,7 +313,7 @@ function pageHome(app) {
   app.innerHTML = `<section class="home">
     <div class="hero"><div class="stage" id="stage"></div>
       <div class="herocard glass" data-glass id="herocard"><div class="eyebrow">${t('heroEyebrow')}</div><h1>${t('heroTitle')}</h1><p>${t('heroSub')}</p>
-        <div class="row"><a class="btn primary" href="#/design" data-testid="start-design">${t('startDesign')}</a><a class="btn" href="#/learn/${D.lessons[0].id}">${t('startLearn')}</a></div></div></div>
+        <div class="row"><a class="btn primary" href="#/design" data-testid="start-design">${t('startDesign')}</a><a class="btn" href="#/learn/${D.lessons[0].id}">${t('startLearn')}</a><a class="btn" href="#/walk">${icon('walk')} ${t('walkEnter')}</a></div></div></div>
     <div class="course"><div class="head"><div><h2>${t('courseTitle')}</h2><p class="muted">${t('courseSub')}</p></div><div class="prog"><div class="bar"><i style="width:${n / D.lessons.length * 100}%"></i></div><span>${t('progress', { a: n, b: D.lessons.length })}</span></div></div>
       <div class="cards">${D.lessons.map((l, i) => `<a class="lcard glass" data-glass data-testid="lesson-card" data-id="${l.id}" data-done="${!!P[l.id]}" href="#/learn/${l.id}"><span class="eyebrow">${t('chapter', { n: i + 1 })}${P[l.id] ? ` · <em>${t('done')} ✓</em>` : ''}</span><b>${esc(tr(l.title))}</b><p>${esc(tr(l.intro))}</p></a>`).join('')}</div>
       <a class="house glass" data-glass href="#/design"><span class="eyebrow">${t('yourHouse')}</span><b>${peso(b.total)}</b><span class="muted">${t('refCost')} · ${design.walls.length} ${t('walls')} · ${design.openings.length} ${t('openings')}</span></a>
@@ -323,6 +325,57 @@ function pageHome(app) {
   const pts = [...design.walls.flatMap(w => [w.a, w.b]), ...(design.pool ? [[design.pool.x, design.pool.z], [design.pool.x + design.pool.w, design.pool.z + design.pool.d]] : [])];
   const focus = pts.length ? [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))] : null;
   requestAnimationFrame(() => { viewer.resize(); viewer.view = '3d'; viewer.cam = viewer.persp; viewer.controls.enabled = true; viewer.home3d(false, focus); });
+}
+
+// ───── 第一人称参观 ─────
+const WHERE = { yard: 'walkYard', f1: 'walkF1', f2: 'walkF2', pool: 'walkPool' };
+let started = false, walkGo = () => { };
+function pageWalk(app) {
+  const touch = matchMedia('(pointer: coarse)').matches;
+  app.innerHTML = `<section class="walk">
+    <div class="stage" id="stage"></div><div class="crosshair" aria-hidden="true"></div>
+    <div class="aimtip" id="aimtip"></div>
+    <div class="whud glass" data-glass id="whud"><div class="row between"><b>${t('walkTitle')}</b><span class="where" id="where"></span></div>
+      <div class="keys">${touch ? `<span>${t('walkTouch')}</span>` : `<span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ${t('walkMove')}</span><span><kbd>${t('walkSpace')}</kbd> ${t('walkJump')}</span><span><kbd>F</kbd> ${t('walkDoor')}</span><span><kbd>Shift</kbd> ${t('walkRun')}</span><span>${t('walkMouse')}</span><span><kbd>Esc</kbd> ${t('walkEsc')}</span>`}</div>
+      <div class="row"><a class="btn" href="#/design">${t('walkExit')}</a><button id="respawn">${t('walkRespawn')}</button></div></div>
+    <div class="wstart" id="wstart"><div class="glass card" data-glass><b>${t('walkTitle')}</b><p>${design.walls.length ? t('walkStart') : t('walkEmpty')}</p>${design.walls.length ? `<button class="primary" id="go">${touch ? t('walkGoTouch') : t('walkGo')}</button>` : `<a class="btn primary" href="#/design">${t('startDesign')}</a>`}</div></div>
+    ${touch ? `<div class="joy" id="joy"><i></i></div><div class="tbtns"><button id="tj">${t('walkJump')}</button><button id="tf">F ${t('walkDoor')}</button></div>` : ''}
+    <div class="toast" id="toast"></div></section>`;
+  attachCanvas($('#stage')); viewer.freeRect = () => null; viewer.controls.enabled = false;
+  viewer.build(design, lastStage(), {});
+  const hud = { where: $('#where'), aim: $('#aimtip'), start: $('#wstart') };
+  let lastWhere = '', lastAim = null;
+  walker = new Walker(viewer, design, {
+    onLock: l => { hud.start.classList.toggle('hide', l || started); },
+    onDoor: (id, open) => toast(open ? t('walkOpened') : t('walkClosed')),
+    onTick: () => {
+      const w = walker.where(); if (w !== lastWhere) { lastWhere = w; hud.where.textContent = t(WHERE[w]); }
+      if ((walker.stats.frames & 7) === 0) { const a = walker.aimDoor(); if (a !== lastAim) { lastAim = a; hud.aim.textContent = a ? t(walker.open[a] ? 'walkAimClose' : 'walkAimOpen') : ''; hud.aim.classList.toggle('on', !!a); } }
+    },
+  });
+  walker.start();
+  started = false;
+  const go = () => { started = true; hud.start.classList.add('hide'); if (!touch && viewer.canvas.requestPointerLock) { try { const r = viewer.canvas.requestPointerLock(); if (r && r.catch) r.catch(() => { }); } catch (e) { } } };
+  const g = $('#go'); if (g) g.onclick = go;
+  walkGo = go;
+  $('#respawn').onclick = () => walker.spawn();
+  if (!pageWalk.bound) { // 只绑一次：点画面重新锁鼠标；没锁鼠标时按住拖动转头（手机右半屏拖动）
+    pageWalk.bound = true; let drag = null;
+    viewer.canvas.addEventListener('click', () => { if (current === 'walk' && started && !matchMedia('(pointer: coarse)').matches && document.pointerLockElement !== viewer.canvas) walkGo(); });
+    viewer.canvas.addEventListener('pointerdown', e => { if (current !== 'walk' || document.pointerLockElement) return; drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+    addEventListener('pointermove', e => { if (!drag || e.pointerId !== drag.id || !walker) return; walker.look((e.clientX - drag.x) * 1.4, (e.clientY - drag.y) * 1.4); drag.x = e.clientX; drag.y = e.clientY; });
+    addEventListener('pointerup', e => { if (drag && e.pointerId === drag.id) drag = null; });
+  }
+  if (touch) {
+    const joy = $('#joy'), knob = joy.firstElementChild; let jid = null;
+    const set = e => { const r = joy.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2; let dx = (e.clientX - cx) / (r.width / 2), dy = (e.clientY - cy) / (r.height / 2); const m = Math.hypot(dx, dy); if (m > 1) { dx /= m; dy /= m; } walker.joy = [dx, -dy]; knob.style.transform = `translate(${dx * 34}px, ${dy * 34}px)`; };
+    joy.addEventListener('pointerdown', e => { e.stopPropagation(); jid = e.pointerId; joy.setPointerCapture(jid); set(e); });
+    joy.addEventListener('pointermove', e => { if (e.pointerId === jid) set(e); });
+    const end = () => { jid = null; walker.joy = [0, 0]; knob.style.transform = ''; }; joy.addEventListener('pointerup', end); joy.addEventListener('pointercancel', end);
+    const tj = $('#tj'); tj.addEventListener('pointerdown', e => { e.preventDefault(); walker.jumpBtn = true; }); tj.addEventListener('pointerup', () => { walker.jumpBtn = false; });
+    $('#tf').onclick = () => walker.toggleDoor();
+  }
+  window.__walk = { state: () => walker.state(), teleport: (x, y, z, yaw = walker.yaw, pitch = 0) => { walker.pos.set(x, y, z); walker.yaw = yaw; walker.pitch = pitch; walker.vel.set(0, 0, 0); walker.apply(); }, door: () => walker.toggleDoor(), solids: () => walker.solids.length };
 }
 
 // ───── 清单与出处 ─────
@@ -353,9 +406,10 @@ function render() {
   document.querySelectorAll('[data-i18n]').forEach(e => { e.textContent = t(e.dataset.i18n); });
   if (ui.playing) { clearInterval(ui.playing); ui.playing = null; }
   if (viewer) { viewer.controls.autoRotate = false; viewer.controls.enableZoom = true; viewer.setGhost(null); if (viewer.canvas.parentElement) viewer.canvas.remove(); viewer.freeRect = () => null; }
-  app.onclick = null; lesson = null;
-  document.body.dataset.page = current = h.startsWith('#/design') ? 'design' : h.startsWith('#/learn/') ? 'learn' : h.startsWith('#/boq') ? 'boq' : h.startsWith('#/sources') ? 'sources' : 'home';
-  if (current === 'design') pageDesign(app); else if (current === 'learn') pageLearn(app, h.slice(8)); else if (current === 'boq') pageBoq(app); else if (current === 'sources') pageSources(app); else pageHome(app);
+  app.onclick = null; lesson = null; if (viewer) viewer.controls.enabled = true;
+  if (walker) { walker.stop(); walker = null; window.__walk = undefined; }
+  document.body.dataset.page = current = h.startsWith('#/design') ? 'design' : h.startsWith('#/learn/') ? 'learn' : h.startsWith('#/boq') ? 'boq' : h.startsWith('#/sources') ? 'sources' : h.startsWith('#/walk') ? 'walk' : 'home';
+  if (current === 'walk') pageWalk(app); else if (current === 'design') pageDesign(app); else if (current === 'learn') pageLearn(app, h.slice(8)); else if (current === 'boq') pageBoq(app); else if (current === 'sources') pageSources(app); else pageHome(app);
   app.firstElementChild && app.firstElementChild.classList.add('enter');
   scrollTo(0, 0);
 }
