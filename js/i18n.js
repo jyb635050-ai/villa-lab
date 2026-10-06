@@ -39,11 +39,14 @@ const S = {
   walkMove: ['走动', 'move'], walkSpace: ['空格', 'Space'], walkJump: ['跳', 'Jump'], walkDoor: ['开门', 'door'], walkRun: ['跑', 'run'], walkMouse: ['鼠标：看四周', 'Mouse: look'], walkEsc: ['放开鼠标', 'free mouse'],
   walkTouch: ['左下摇杆走动 · 右边拖动看四周 · 按钮跳和开门', 'Left stick to move · drag right side to look · buttons to jump and open doors'],
   walkExit: ['回设计器', 'Back to designer'], walkRespawn: ['回到门口', 'Back to the door'],
-  walkStart: ['从院子出发，走到门前按 F 开门，进屋逛一楼，再顺着楼梯上二楼。', 'Start in the yard, press F at the front door, explore the ground floor, then take the stairs up.'],
+  walkStart: ['从门口的街上出发：走到大门前按 F 推开大门，进院子；到入户门前按 F 开门；窗户也能按 F 推开。逛完一楼顺着楼梯上二楼。', 'Start on the street: press F at the gate, walk in, press F at the front door — windows open with F too. Take the stairs up after the ground floor.'],
   walkEmpty: ['设计里还没有房子，先去设计器画几面墙，或载入示范别墅。', 'There is no house yet — draw some walls or load the sample villa first.'],
   walkGo: ['点击开始（锁定鼠标）', 'Click to start (locks the mouse)'], walkGoTouch: ['开始参观', 'Start'],
   walkYard: ['院子', 'Yard'], walkF1: ['一楼', 'Ground floor'], walkF2: ['二楼', 'Upper floor'], walkPool: ['泳池里', 'In the pool'],
-  walkAimOpen: ['按 F 开门', 'Press F to open'], walkAimClose: ['按 F 关门', 'Press F to close'], walkOpened: ['门开了', 'Door opened'], walkClosed: ['门关了', 'Door closed'],
+  walkAimDoorOpen: ['按 F 开门', 'Press F to open the door'], walkAimDoorClose: ['按 F 关门', 'Press F to close the door'], walkDoorOpened: ['门开了', 'Door opened'], walkDoorClosed: ['门关了', 'Door closed'],
+  walkAimWinOpen: ['按 F 推开窗', 'Press F to open the window'], walkAimWinClose: ['按 F 关窗', 'Press F to close the window'], walkWinOpened: ['窗推开了', 'Window opened'], walkWinClosed: ['窗关上了', 'Window closed'],
+  walkAimGateOpen: ['按 F 推开大门', 'Press F to open the gate'], walkAimGateClose: ['按 F 关大门', 'Press F to close the gate'], walkGateOpened: ['大门开了', 'Gate opened'], walkGateClosed: ['大门关了', 'Gate closed'],
+  walkStreet: ['街上', 'Street'], siteTitle: ['院子', 'Site'], siteFence: ['围墙与大门', 'Fence & gate'], siteParking: ['车位与车棚', 'Parking & carport'], siteNoRoom: ['前院太浅放不下车位（至少要 5 m）', 'Front yard too shallow for parking (needs 5 m)'],
 };
 export let lang = 'zh';
 export function setLang(l) { lang = l === 'en' ? 'en' : 'zh'; }

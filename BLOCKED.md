@@ -2,7 +2,7 @@
 
 1. **屋面、屋架、防水的价格含安装费**（与「只算材料费」的拍板不一致）
    - 原因：能在原网页找到原文的屋面价格（aedoconstruction.com 屋面文章）只给了「供货+安装」每平米价，找不到纯材料价；PSA 价格指数对浏览器 403，也用不了。
-   - 现在的做法：照原文价格录入，清单页「价格口径」列标「含安装」，页面免责说明也写明了。涉及 gi-corrugated、longspan-05、clay-tile、concrete-tile、roof-truss、waterproof-roof、waterproof-pool 七项。
+   - 现在的做法：照原文价格录入，清单页「价格口径」列标「含安装」，页面免责说明也写明了。涉及 gi-corrugated、longspan-05、clay-tile、concrete-tile、roof-truss、waterproof-roof、waterproof-pool 七项；2026-10-06 新增的围墙（fence-chb，每延米）和车棚（carport，每平米）同样是含安装价。
    - 需要裁决：保留（如实标注）／剔除这几项的价格改成「暂无参考价」／另找纯材料价来源。
 
 2. **价格和课程出处几乎都来自同一个网站**（aedoconstruction.com，菲律宾持证土木工程师事务所的 2026 年文章）

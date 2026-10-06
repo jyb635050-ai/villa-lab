@@ -5,6 +5,7 @@ import { F, wlen, bboxOf, columnsOf, topFloor, groundSlabOf, slab1Of, stairHole,
 import { furnish } from './interior.js';
 
 const ease = t => 1 - Math.pow(1 - t, 3);
+const UNIT = new THREE.BoxGeometry(1, 1, 1); UNIT.userData.keep = true;
 const STAGES = ['site', 'excavation', 'footing', 'column', 'slab', 'wall', 'roof', 'pool', 'finish'];
 const SI = id => STAGES.indexOf(id);
 
@@ -98,7 +99,7 @@ export class Viewer {
   // ───── 搭场景 ─────
   build(d, stage, o = {}) {
     const prev = this.stageShown; this.stageShown = stage; this.lot = d.lot; this.doors = new Map();
-    this.root.traverse(x => { if (x.geometry) x.geometry.dispose(); });
+    this.root.traverse(x => { if (x.geometry && !x.geometry.userData.keep) x.geometry.dispose(); });
     this.scene.remove(this.root); this.root = new THREE.Group(); this.scene.add(this.root);
     const groups = STAGES.map(() => { const g = new THREE.Group(); this.root.add(g); return g; });
     const at = id => stage >= SI(id), G = id => groups[SI(id)];
@@ -186,10 +187,8 @@ export class Viewer {
         piece(s0, s1, base, ob - base);
         piece(s0, s1, ot, top - ot);
         if (at('finish') && !plan) {
-          if (op.type === 'window') {
-            const gl = alongBox(G('finish'), w, s0, s1, ob, ot - ob, 0.03, this.plain(0x9fd0f0, { op: 0.45, r: 0.05, metal: 0.2 }), 1, ud); if (gl) gl.castShadow = false;
-            alongBox(G('finish'), w, s0, s1, ob - 0.04, 0.05, th + 0.06, this.plain(0x55595e, { r: 0.4, metal: 0.5 }), 1, ud);
-          } else this.door(G('finish'), w, op, s0, s1, ob, ot, th, fb, o.doorOpen && o.doorOpen[op.id]);
+          if (op.type === 'window') this.win(G('finish'), w, op, s0, s1, ob, ot, th, fb, o.doorOpen && o.doorOpen[op.id]);
+          else this.door(G('finish'), w, op, s0, s1, ob, ot, th, fb, o.doorOpen && o.doorOpen[op.id]);
         }
         t = s1;
       }
@@ -233,6 +232,7 @@ export class Viewer {
         add(G('finish'), boxGeo(xa ? L : 0.06, 0.05, xa ? 0.06 : L), this.plain(0x55595e, { r: 0.4, metal: 0.5 }), cxr, h0 + 1.0, czr, { part: 'railing' });
       }
       furnish(this, G('finish'), d);
+      this.site(G('finish'), d, o.doorOpen || {});
     }
     // 泳池
     if (d.pool && (at('pool') || plan)) {
@@ -262,24 +262,132 @@ export class Viewer {
     this.dirty = true;
     function cx0(a) { return (a[0] + a[1]) / 2; }
   }
-  // 门扇：普通门绕门轴转向室内，宽于 1.5 m 的是推拉玻璃门
-  door(g, w, op, s0, s1, ob, ot, th, fb, open0) {
-    const L = wlen(w), ua = [(w.b[0] - w.a[0]) / L, (w.b[1] - w.a[1]) / L], slide = op.w > 1.5;
-    const hinge = [w.a[0] + ua[0] * (s0 + 0.03), w.a[1] + ua[1] * (s0 + 0.03)], L2 = s1 - s0 - 0.06, H2 = ot - ob;
-    const pivot = new THREE.Group(); pivot.position.set(hinge[0], ob, hinge[1]); const a = Math.atan2(-ua[1], ua[0]); pivot.rotation.y = a;
-    const lz = [Math.sin(a), Math.cos(a)];
-    let n = lz; if (fb) { const c = [(fb[0] + fb[2]) / 2, (fb[1] + fb[3]) / 2], mid = [hinge[0] + ua[0] * L2 / 2, hinge[1] + ua[1] * L2 / 2]; const v = [c[0] - mid[0], c[1] - mid[1]]; if (v[0] * lz[0] + v[1] * lz[1] < 0) n = [-lz[0], -lz[1]]; }
-    const sg = Math.sign(n[0] * lz[0] + n[1] * lz[1]) || 1, swing = new THREE.Group(); pivot.add(swing);
-    const mesh = new THREE.Mesh(boxGeo(L2, H2, slide ? 0.04 : 0.05), slide ? this.plain(0x9fd0f0, { op: 0.45, r: 0.05 }) : this.plain(0x8a5a36, { r: 0.6 }));
-    mesh.position.set(L2 / 2, H2 / 2, slide ? sg * (th / 2 + 0.03) : 0); mesh.castShadow = !slide; mesh.receiveShadow = true; mesh.userData = { door: op.id, wall: w.id, part: 'door' };
-    if (!slide) { const knob = new THREE.Mesh(boxGeo(0.04, 0.04, 0.14), this.plain(0xd0d3d6, { r: 0.3, metal: 0.8 })); knob.position.set(L2 - 0.08, 1.0 - H2 / 2, 0); mesh.add(knob); }
-    swing.add(mesh); g.add(pivot);
-    const rec = { id: op.id, swing, mesh, slide, sg, L2, open: 0, wall: w.id, op }; this.doors.set(op.id, rec); this.setDoor(op.id, open0 || 0);
+  // ───── 门窗构件 ─────
+  // 局部坐标：x 沿墙（从洞口起点），y 向上（从洞底），z 沿墙法线；sg＝室内在 +z 还是 -z
+  frameAt(w, s0, ob) {
+    const L = wlen(w), ua = [(w.b[0] - w.a[0]) / L, (w.b[1] - w.a[1]) / L], g = new THREE.Group();
+    g.position.set(w.a[0] + ua[0] * s0, ob, w.a[1] + ua[1] * s0); const a = Math.atan2(-ua[1], ua[0]); g.rotation.y = a;
+    return { g, lz: [Math.sin(a), Math.cos(a)], ua };
   }
-  setDoor(id, v) {
-    const r = this.doors.get(id); if (!r) return; r.open = v;
-    if (r.slide) r.mesh.position.x = r.L2 / 2 - v * r.L2 * 0.92; else r.swing.rotation.y = -r.sg * Math.PI / 2 * v * 0.95;
-    this.dirty = true;
+  inSide(fb, pt, lz) { if (!fb) return 1; const v = [(fb[0] + fb[2]) / 2 - pt[0], (fb[1] + fb[3]) / 2 - pt[1]]; return v[0] * lz[0] + v[1] * lz[1] < 0 ? -1 : 1; }
+  onEdge(fb, w) { if (!fb) return false; return w.a[1] === w.b[1] ? (w.a[1] === fb[1] || w.a[1] === fb[3]) : (w.a[0] === fb[0] || w.a[0] === fb[2]); }
+  bar(g, x, y, z, sx, sy, sz, m, ud) { const me = new THREE.Mesh(UNIT, m); me.scale.set(sx, sy, sz); me.position.set(x, y, z); me.castShadow = false; me.receiveShadow = true; if (ud) me.userData = ud; g.add(me); return me; }
+  get ALU() { return this.plain(0x4a4f55, { r: 0.35, metal: 0.6 }); }
+  get GLASS() { return this.plain(0xa8cde2, { op: 0.32, r: 0.05, metal: 0.3 }); }
+  center(w, op, y) { const L = wlen(w); return new THREE.Vector3(w.a[0] + (w.b[0] - w.a[0]) * op.at / L, y, w.a[1] + (w.b[1] - w.a[1]) * op.at / L); }
+  // 铝合金推拉窗：外框 + 两扇窗扇（前后错开），外侧石窗台；F 推开左扇
+  win(g, w, op, s0, s1, ob, ot, th, fb, open0) {
+    const { g: f, lz, ua } = this.frameAt(w, s0, ob), Lw = s1 - s0, H = ot - ob, mid = [f.position.x + ua[0] * Lw / 2, f.position.z + ua[1] * Lw / 2], sg = this.inSide(fb, mid, lz), A = this.ALU, b = 0.05, fd = 0.09;
+    this.bar(f, Lw / 2, b / 2, 0, Lw, b, fd, A); this.bar(f, Lw / 2, H - b / 2, 0, Lw, b, fd, A); this.bar(f, b / 2, H / 2, 0, b, H, fd, A); this.bar(f, Lw - b / 2, H / 2, 0, b, H, fd, A);
+    this.bar(f, Lw / 2, -0.03, -sg * (th / 2 + 0.02), Lw + 0.14, 0.05, 0.12, this.plain(0xece8df, { r: 0.6 }));
+    this.bar(f, Lw / 2, -0.015, sg * (th / 2 - 0.01), Lw + 0.04, 0.03, 0.07, this.plain(0xf3f0ea, { r: 0.6 }));
+    const sw = (Lw - 2 * b) / 2 + 0.025, sh = H - 2 * b, sb = 0.035, targets = [];
+    const sash = (x0, z) => {
+      const sgp = new THREE.Group(); sgp.position.set(x0, b, z);
+      this.bar(sgp, sw / 2, sb / 2, 0, sw, sb, 0.03, A); this.bar(sgp, sw / 2, sh - sb / 2, 0, sw, sb, 0.03, A); this.bar(sgp, sb / 2, sh / 2, 0, sb, sh, 0.03, A); this.bar(sgp, sw - sb / 2, sh / 2, 0, sb, sh, 0.03, A);
+      targets.push(this.bar(sgp, sw / 2, sh / 2, 0, sw - 2 * sb, sh - 2 * sb, 0.008, this.GLASS, { win: op.id, part: 'window' }));
+      f.add(sgp); return sgp;
+    };
+    const left = sash(b, -0.017); sash(b + sw - 0.05, 0.017);
+    this.bar(left, sw - 0.06, sh / 2, -0.03, 0.02, 0.12, 0.02, this.plain(0xc9ccd0, { r: 0.3, metal: 0.8 }));
+    g.add(f);
+    const travel = sw - 0.06;
+    this.doors.set(op.id, { id: op.id, kind: 'window', mesh: targets[0], targets, open: 0, center: this.center(w, op, ob + H / 2), apply: v => { left.position.x = b + v * travel; } });
+    this.setDoor(op.id, open0 || 0);
+  }
+  // 门：入户门深胡桃木带门板、室内门浅橡木平板；宽于 1.5 m 的是落地铝合金推拉玻璃门
+  door(g, w, op, s0, s1, ob, ot, th, fb, open0) {
+    const { g: f, lz, ua } = this.frameAt(w, s0, ob), Lw = s1 - s0, H = ot - ob, mid = [f.position.x + ua[0] * Lw / 2, f.position.z + ua[1] * Lw / 2], sg = this.inSide(fb, mid, lz);
+    const center = this.center(w, op, ob + Math.min(1.4, H - 0.3)), A = this.ALU;
+    if (op.w > 1.5) {
+      const fd = Math.max(0.1, th - 0.02);
+      this.bar(f, Lw / 2, H - 0.03, 0, Lw, 0.06, fd, A); this.bar(f, 0.03, H / 2, 0, 0.06, H, fd, A); this.bar(f, Lw - 0.03, H / 2, 0, 0.06, H, fd, A); this.bar(f, Lw / 2, 0.012, 0, Lw, 0.024, fd + 0.04, A);
+      const pw = (Lw - 0.12) / 2 + 0.03, ph = H - 0.09, st = 0.06, targets = [];
+      const panel = (x0, z, pull) => {
+        const pg = new THREE.Group(); pg.position.set(x0, 0.025, z);
+        this.bar(pg, pw / 2, 0.05, 0, pw, 0.1, 0.035, A); this.bar(pg, pw / 2, ph - st / 2, 0, pw, st, 0.035, A); this.bar(pg, st / 2, ph / 2, 0, st, ph, 0.035, A); this.bar(pg, pw - st / 2, ph / 2, 0, st, ph, 0.035, A);
+        targets.push(this.bar(pg, pw / 2, ph / 2 + 0.02, 0, pw - 2 * st, ph - 0.16, 0.01, this.GLASS, { door: op.id, part: 'door' }));
+        if (pull) for (const zz of [-0.03, 0.03]) this.bar(pg, pull, 1.0, zz, 0.025, 0.5, 0.025, this.plain(0xc9ccd0, { r: 0.3, metal: 0.8 }));
+        f.add(pg); return pg;
+      };
+      panel(Lw / 2 - 0.03, 0.022, 0); const mv = panel(0.06, -0.022, pw - 0.1);
+      g.add(f);
+      this.doors.set(op.id, { id: op.id, kind: 'slide', mesh: targets[1], targets, open: 0, center, apply: v => { mv.position.x = 0.06 + v * (pw - 0.12); } });
+    } else {
+      const ext = this.onEdge(fb, w), case_ = ext ? this.plain(0x4b3122, { r: 0.6 }) : this.plain(0xf2efe9, { r: 0.7 });
+      for (const zs of [-1, 1]) { const z = zs * (th / 2 + 0.012); this.bar(f, -0.035, H / 2 + 0.035, z, 0.07, H + 0.07, 0.024, case_); this.bar(f, Lw + 0.035, H / 2 + 0.035, z, 0.07, H + 0.07, 0.024, case_); this.bar(f, Lw / 2, H + 0.035, z, Lw + 0.14, 0.07, 0.024, case_); }
+      this.bar(f, 0.015, H / 2, 0, 0.03, H, th, case_); this.bar(f, Lw - 0.015, H / 2, 0, 0.03, H, th, case_); this.bar(f, Lw / 2, H - 0.015, 0, Lw, 0.03, th, case_);
+      const swing = new THREE.Group(); swing.position.set(0.03, 0, 0); f.add(swing);
+      const L2 = Lw - 0.06, H2 = H - 0.03, leafM = ext ? this.plain(0x6a4228, { r: 0.55 }) : this.plain(0xcfae86, { r: 0.6 });
+      const leaf = this.bar(swing, L2 / 2, H2 / 2, 0, L2, H2, 0.045, leafM, { door: op.id, part: 'door' }); leaf.castShadow = true;
+      const deco = new THREE.Group(); deco.position.set(L2 / 2, H2 / 2, 0); swing.add(deco);
+      if (ext) { const pm = this.plain(0x55331d, { r: 0.5 }); for (const zs of [-1, 1]) for (const [px, py, ph2] of [[-0.18, 0.5, 0.75], [0.18, 0.5, 0.75], [-0.18, -0.45, 0.85], [0.18, -0.45, 0.85]]) this.bar(deco, px * L2 / 0.84, py, zs * 0.027, L2 * 0.32, ph2, 0.012, pm); }
+      else for (const zs of [-1, 1]) this.bar(deco, 0, 0, zs * 0.0235, L2 - 0.12, 0.012, 0.002, this.plain(0xb8956c));
+      const hm = this.plain(0xd0d3d6, { r: 0.25, metal: 0.85 });
+      for (const zs of [-1, 1]) { this.bar(deco, L2 / 2 - 0.09, 1.0 - H2 / 2, zs * 0.045, 0.13, 0.022, 0.022, hm); this.bar(deco, L2 / 2 - 0.07, 1.0 - H2 / 2, zs * 0.03, 0.05, 0.08, 0.012, hm); }
+      g.add(f);
+      this.doors.set(op.id, { id: op.id, kind: 'door', mesh: leaf, targets: [leaf], open: 0, center, apply: v => { swing.rotation.y = -sg * Math.PI / 2 * v * 0.95; } });
+    }
+    this.setDoor(op.id, open0 || 0);
+  }
+  setDoor(id, v) { const r = this.doors.get(id); if (!r) return; r.open = v; r.apply(v); this.dirty = true; }
+  // ───── 院子：街道、围墙、推拉大门、车位与车棚 ─────
+  site(g, d, open) {
+    const st = d.site; if (!st) return;
+    const W = d.lot.w, D = d.lot.d, plaster = this.plain(0xebe4d6, { r: 0.85 }), cap = this.plain(0xd9d1c1, { r: 0.7 }), add = (m, x, y, z, sx, sy, sz, cast = true, ud) => { const me = this.bar(g, x, y, z, sx, sy, sz, m, ud); me.castShadow = cast; return me; };
+    if (st.fence) {
+      add(this.plain(0x3d4045, { r: 0.95 }), W / 2, -0.005, -4.8, W + 60, 0.01, 6.4, false);
+      for (let x = -28; x < W + 28; x += 4) add(this.plain(0xf2f2ee), x, 0.002, -4.8, 2, 0.006, 0.12, false);
+      add(this.plain(0xcfcac0, { r: 0.9 }), W / 2, 0.06, -0.8, W + 60, 0.12, 1.6, false);
+      const gates = st.gates || [], H = 1.8;
+      for (const side of ['n', 's', 'w', 'e']) {
+        const len = side === 'n' || side === 's' ? W : D, gs = gates.filter(q => q.side === side).map(q => [q.at - q.w / 2, q.at + q.w / 2]).sort((a, b) => a[0] - b[0]);
+        const P = u => side === 'n' ? [u, 0.1] : side === 's' ? [u, D - 0.1] : side === 'w' ? [0.1, u] : [W - 0.1, u];
+        const xa = side === 'n' || side === 's', segs = []; let t = 0; for (const [a, b] of gs) { if (a - t > 0.05) segs.push([t, a]); t = b; } if (len - t > 0.05) segs.push([t, len]);
+        for (const [a, b] of segs) {
+          const c = P((a + b) / 2), L = b - a;
+          add(plaster, c[0], H / 2, c[1], xa ? L : 0.15, H, xa ? 0.15 : L);
+          add(cap, c[0], H + 0.03, c[1], xa ? L + 0.1 : 0.25, 0.06, xa ? 0.25 : L + 0.1, false);
+          const n = Math.max(1, Math.ceil(L / 3)); for (let i = 0; i <= n; i++) { const q = P(a + L * i / n); add(plaster, q[0], 1.0, q[1], 0.3, 2.0, 0.3); add(cap, q[0], 2.03, q[1], 0.38, 0.06, 0.38, false); }
+        }
+      }
+      for (const q of gates) {
+        const xa = q.side === 'n' || q.side === 's', out = q.side === 'n' || q.side === 'w' ? -1 : 1, line = q.side === 'n' ? 0.1 : q.side === 's' ? D - 0.1 : q.side === 'w' ? 0.1 : W - 0.1;
+        for (const u of [q.at - q.w / 2 - 0.2, q.at + q.w / 2 + 0.2]) { const x = xa ? u : line, z = xa ? line : u; add(plaster, x, 1.1, z, 0.4, 2.2, 0.4); add(cap, x, 2.23, z, 0.48, 0.06, 0.48, false); }
+        const pg = new THREE.Group(), steel = this.plain(0x2e3135, { r: 0.4, metal: 0.6 }), targets = [];
+        pg.position.set(xa ? q.at - q.w / 2 : line + out * 0.14, 0, xa ? line + out * 0.14 : q.at - q.w / 2); if (!xa) pg.rotation.y = -Math.PI / 2;
+        const gw = q.w, gh = 1.75;
+        for (const [x, y, sx, sy] of [[gw / 2, 0.06, gw, 0.08], [gw / 2, gh - 0.04, gw, 0.08], [0.03, gh / 2, 0.06, gh], [gw - 0.03, gh / 2, 0.06, gh]]) this.bar(pg, x, y, 0, sx, sy, 0.06, steel).castShadow = true;
+        for (let i = 0; i < 9; i++) { const sl = this.bar(pg, gw / 2, 0.22 + i * 0.165, 0, gw - 0.12, 0.12, 0.03, steel, { door: q.id, part: 'gate' }); sl.castShadow = true; targets.push(sl); }
+        g.add(pg); const base = xa ? pg.position.x : pg.position.z;
+        this.doors.set(q.id, { id: q.id, kind: 'gate', mesh: targets[4], targets, open: 0, center: new THREE.Vector3(xa ? q.at : line, 1.2, xa ? line : q.at), span: { xa, a: q.at - q.w / 2, b: q.at + q.w / 2, line },
+          apply: v => { const dlt = -v * gw * 0.95; if (xa) pg.position.x = base + dlt; else pg.position.z = base + dlt; } });
+        this.setDoor(q.id, open[q.id] || 0);
+      }
+    }
+    if (st.parking) {
+      const p = st.parking, cx = p.x + p.w / 2, cz = p.z + p.d / 2, lineM = this.plain(0xf4f4f0);
+      add(this.plain(0xb9b6ae, { r: 0.95 }), cx, 0.02, cz, p.w, 0.04, p.d, false, { part: 'parking' });
+      const n = Math.max(1, Math.round(p.w / 3)); for (let i = 0; i <= n; i++) add(lineM, p.x + 0.06 + (p.w - 0.12) * i / n, 0.043, cz + 0.2, 0.08, 0.004, p.d - 0.6, false);
+      for (let i = 0; i < n; i++) add(this.plain(0xd6a43a), p.x + (i + 0.5) * p.w / n, 0.08, p.z + p.d - 0.45, 0.9, 0.1, 0.15);
+      if (p.carport) {
+        const post = this.plain(0x3a3e43, { r: 0.4, metal: 0.6 }), hR = 2.55;
+        for (const [x, z] of [[p.x + 0.1, p.z + 0.1], [p.x + p.w - 0.1, p.z + 0.1], [p.x + 0.1, p.z + p.d - 0.1], [p.x + p.w - 0.1, p.z + p.d - 0.1]]) add(post, x, hR / 2, z, 0.1, hR, 0.1);
+        add(post, cx, hR - 0.06, p.z + 0.1, p.w, 0.12, 0.08); add(post, cx, hR - 0.06, p.z + p.d - 0.1, p.w, 0.12, 0.08);
+        const roof = new THREE.Mesh(boxGeo(p.w + 0.4, 0.05, p.d + 0.4, this.texM('longspan-05')), this.mat('longspan-05', { double: 1 }));
+        roof.position.set(cx, hR + 0.05, cz); roof.rotation.x = -0.05; roof.castShadow = roof.receiveShadow = true; roof.userData.part = 'carport'; g.add(roof);
+      }
+      if (p.car) this.car(g, p.x + (p.car - 0.5) * p.w / n, p.z + p.d / 2 - 0.1);
+    }
+  }
+  car(g, x, z) {
+    const c = new THREE.Group(); c.position.set(x, 0, z); g.add(c);
+    const body = this.plain(0x2f5d8a, { r: 0.25, metal: 0.55 }), glass = this.plain(0x1c2630, { r: 0.1, metal: 0.4 }), tyre = this.plain(0x1a1a1a, { r: 0.9 }), chrome = this.plain(0xdfe3e6, { r: 0.2, metal: 0.9 });
+    const b = (m, px, py, pz, sx, sy, sz) => { const me = this.bar(c, px, py, pz, sx, sy, sz, m); me.castShadow = true; return me; };
+    b(body, 0, 0.55, 0, 1.8, 0.55, 4.3); b(body, 0, 1.0, -0.15, 1.62, 0.42, 2.2); b(glass, 0, 1.02, -0.15, 1.64, 0.32, 2.0); b(glass, 0, 1.0, 0.98, 1.5, 0.3, 0.06);
+    for (const xs of [-1, 1]) for (const zs of [-1, 1]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.22, 18), tyre); w.rotation.z = Math.PI / 2; w.position.set(xs * 0.8, 0.33, zs * 1.35); w.castShadow = true; c.add(w); }
+    for (const xs of [-1, 1]) { b(this.plain(0xfff6d8, { r: 0.2 }), xs * 0.62, 0.62, 2.16, 0.32, 0.12, 0.03); b(this.plain(0xb3262c, { r: 0.3 }), xs * 0.66, 0.66, -2.16, 0.3, 0.1, 0.03); }
+    b(chrome, 0, 0.42, 2.16, 1.2, 0.08, 0.04);
   }
   // 画图时的预览
   setGhost(gh) {

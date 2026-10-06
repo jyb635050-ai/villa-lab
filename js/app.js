@@ -145,6 +145,8 @@ function renderInspector() {
     <h4>${t('poolDepth')} <span class="muted" id="pdv">${design.pool ? design.pool.depth.toFixed(1) + ' m' : ''}</span></h4>
     ${design.pool ? '' : `<div class="muted small">${t('noPool')}</div>`}
     <div class="range${design.pool ? '' : ' off'}" data-testid="pool-depth"><div class="track"><div class="fill"></div><div class="knob"></div></div></div>
+    <h4>${t('siteTitle')}</h4>
+    <div class="seg full"><button data-site="fence" aria-pressed="${!!(design.site && design.site.fence)}">${t('siteFence')}</button><button data-site="parking" aria-pressed="${!!(design.site && design.site.parking)}">${t('siteParking')}</button></div>
     <div class="files"><button data-testid="load-sample">${t('loadSample')}</button><button data-testid="new-design">${t('newDesign')}</button><button data-testid="export">${t('export')}</button><label class="btn">${t('import')}<input type="file" accept=".json,application/json" data-testid="import" hidden></label></div>`;
   slider($('[data-testid=pool-depth]'), { min: 0.8, max: 3, step: 0.1, get: () => (design.pool ? design.pool.depth : 1.5), set: v => { if (!design.pool) return; const d = clone(design); d.pool.depth = v; commit(d, true, true); }, text: v => v.toFixed(1) + ' m' });
   el.onclick = e => {
@@ -155,6 +157,7 @@ function renderInspector() {
     else if (k === 'load-sample') { commit(D.sample); ui.selected = null; viewer.lot = design.lot; viewer.setView(ui.view); rebuild(); }
     else if (k === 'new-design') confirmBox(t('confirmNew'), () => { const d = clone(design); d.walls = []; d.openings = []; d.pool = null; d.stairs = null; ui.selected = null; commit(d); });
     else if (k === 'export') { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(design, null, 1)], { type: 'application/json' })); a.download = 'villa-design.json'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
+    else if (bt.dataset.site) toggleSite(bt.dataset.site);
     else if (bt.dataset.act === 'del') delSelected();
     else if (bt.dataset.rm) { const d = clone(design); d.openings = d.openings.filter(o => o.id !== bt.dataset.rm); commit(d); }
   };
@@ -163,6 +166,25 @@ function renderInspector() {
     try { const d = JSON.parse(await f.text()); if (d.v !== 1 || !Array.isArray(d.walls) || !d.lot) throw 0; ui.selected = null; commit(d); viewer.lot = design.lot; viewer.setView(ui.view); rebuild(); toast(t('imported')); } catch (x) { toast(t('importBad')); }
     e.target.value = '';
   };
+}
+// 院子：一键加围墙+大门、车位+车棚（自动摆在前院，放不下就提示）
+function toggleSite(k) {
+  const d = clone(design), st = d.site = Object.assign({}, d.site || {}), W = d.lot.w, b0 = (() => { const ws = d.walls.filter(w => w.floor === 0); if (!ws.length) return null; const xs = ws.flatMap(w => [w.a[0], w.b[0]]), zs = ws.flatMap(w => [w.a[1], w.b[1]]); return [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)]; })();
+  if (k === 'parking') {
+    if (st.parking) delete st.parking;
+    else {
+      const front = b0 ? b0[1] : d.lot.d / 2, dep = Math.min(5.3, front - 0.7);
+      if (dep < 4.8 || W < 7) return toast(t('siteNoRoom'));
+      const x = W - 6.5 >= (b0 ? b0[2] : 0) || !b0 ? W - 6.5 : 0.5;
+      st.parking = { x: Math.max(0.5, x), z: 0.5, w: 6, d: Math.round(dep * 10) / 10, carport: true, car: 2 };
+      if (st.fence && st.gates && st.gates[0]) st.gates[0].at = Math.min(W - 2.5, Math.max(2.5, st.parking.x + 3));
+    }
+  } else {
+    if (st.fence) { delete st.fence; delete st.gates; }
+    else { st.fence = true; st.gates = [{ id: 'gate1', side: 'n', at: st.parking ? Math.min(W - 2.5, st.parking.x + 3) : W / 2, w: Math.min(4, W - 2) }]; }
+  }
+  if (!Object.keys(st).length) delete d.site;
+  commit(d);
 }
 function applyMat(slot, id) {
   const d = clone(design);
@@ -328,7 +350,8 @@ function pageHome(app) {
 }
 
 // ───── 第一人称参观 ─────
-const WHERE = { yard: 'walkYard', f1: 'walkF1', f2: 'walkF2', pool: 'walkPool' };
+const WHERE = { yard: 'walkYard', f1: 'walkF1', f2: 'walkF2', pool: 'walkPool', street: 'walkStreet' };
+const AIM = { door: 'Door', slide: 'Door', window: 'Win', gate: 'Gate' };
 let started = false, walkGo = () => { };
 function pageWalk(app) {
   const touch = matchMedia('(pointer: coarse)').matches;
@@ -347,10 +370,10 @@ function pageWalk(app) {
   let lastWhere = '', lastAim = null;
   walker = new Walker(viewer, design, {
     onLock: l => { hud.start.classList.toggle('hide', l || started); },
-    onDoor: (id, open) => toast(open ? t('walkOpened') : t('walkClosed')),
+    onDoor: (id, open, kind) => toast(t('walk' + AIM[kind] + (open ? 'Opened' : 'Closed'))),
     onTick: () => {
       const w = walker.where(); if (w !== lastWhere) { lastWhere = w; hud.where.textContent = t(WHERE[w]); }
-      if ((walker.stats.frames & 7) === 0) { const a = walker.aimDoor(); if (a !== lastAim) { lastAim = a; hud.aim.textContent = a ? t(walker.open[a] ? 'walkAimClose' : 'walkAimOpen') : ''; hud.aim.classList.toggle('on', !!a); } }
+      if ((walker.stats.frames & 7) === 0) { const a = walker.aimDoor(), key = a && a + ':' + !!walker.open[a]; if (key !== lastAim) { lastAim = key; hud.aim.textContent = a ? t('walkAim' + AIM[walker.kindOf(a)] + (walker.open[a] ? 'Close' : 'Open')) : ''; hud.aim.classList.toggle('on', !!a); } }
     },
   });
   walker.start();
@@ -420,6 +443,8 @@ function render() {
   [D.mats, D.stages, D.lessons, D.sample] = await Promise.all(['materials', 'stages', 'lessons', 'sample'].map(j));
   ui.stage = lastStage();
   design = store.get(K.design, null); if (!design || design.v !== 1) design = clone(D.sample);
+  // 浏览器里存的还是旧版示范别墅（楼梯在 11.5、没有家具/院子）→ 自动换成新版
+  if (design.stairs && design.stairs.x === 11.5 && design.stairs.z === 6.5 && !design.furniture && design.walls.length === 12 && design.walls.every((w, i) => w.id === D.sample.walls[i].id)) { design = clone(D.sample); save(); }
   viewer = new Viewer(); await viewer.init(D.mats);
   const c = viewer.canvas; c.addEventListener('pointerdown', onDown); c.addEventListener('pointermove', onMove); c.addEventListener('pointerup', onUp);
   c.addEventListener('pointerleave', () => { if (current === 'design' && !ui.drag) viewer.setGhost(null); });

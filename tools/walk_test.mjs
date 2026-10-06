@@ -19,7 +19,15 @@ const hold = async (key, ms) => { await p.keyboard.down(key); await sleep(ms); a
 const tp = (x, y, z, yaw, pitch = 0) => p.evaluate(a => window.__walk.teleport(...a), [x, y, z, yaw, pitch]);
 
 await p.click('#go').catch(() => { }); await sleep(800);
-let s = await st(); rec('spawn', s.where === 'yard' && Math.abs(s.x - 13) < 0.1 && Math.abs(s.z - 3) < 0.1, JSON.stringify(s));
+let s = await st(); rec('spawn', s.where === 'street' && s.z < -2, `从街上出发 ${JSON.stringify(s)}`);
+await shot('0-street');
+await hold('KeyW', 2500); s = await st();
+rec('gate-blocks', s.z < 0 && s.z > -1.2 && s.aim === 'gate1', `走到大门被挡住 z=${s.z}，准星对着 ${s.aim}`);
+await p.keyboard.press('KeyF'); await sleep(800); s = await st(); await shot('0-gate-open');
+rec('gate-open', s.open.gate1 === true, `按 F 推开大门 ${JSON.stringify(s.open)}`);
+await hold('KeyW', 1500); s = await st();
+rec('gate-enter', s.where === 'yard' && s.z > 1, `穿过大门进院子 ${s.where} z=${s.z}`);
+await tp(13, 0, 3, Math.PI, -0.05); await sleep(300);
 const A = await shot('1-yard');
 const t0 = await p.evaluate(() => performance.now());
 await hold('KeyW', 2500); s = await st();
@@ -39,6 +47,10 @@ const y0 = s.y; await p.keyboard.down('Space'); await sleep(180); const sj = awa
 rec('jump', sj.y - y0 > 0.4 && Math.abs(sl.y - y0) < 0.05, `起跳 ${y0}→${sj.y}，落回 ${sl.y}`);
 // 客厅看一眼
 await tp(10.5, 0.1, 12.2, Math.PI / 2 + 0.5, -0.15); await sleep(400); await shot('5-living');
+// 开窗：客厅南窗 o6
+await tp(9.3, 0.1, 15.0, 2.23, -0.15); await sleep(400); s = await st(); const W1 = await shot('5b-window');
+await p.keyboard.press('KeyF'); await sleep(700); const s2 = await st(); const W2 = await shot('5c-window-open');
+rec('window', s.aim === 'o6' && s2.open.o6 === true && diff(W1, W2) > 0.003, `对着窗 ${s.aim} 按 F → ${JSON.stringify(s2.open)}，画面变化 ${(diff(W1, W2) * 100).toFixed(2)}%`);
 // 撞墙
 await tp(10.0, 0.1, 15.0, Math.PI / 2); await hold('KeyW', 3500); s = await st();
 rec('wall', s.x > 4.0 + 0.075 + 0.27 && s.where === 'f1', `朝西墙走 3.5 秒 x=${s.x}`);

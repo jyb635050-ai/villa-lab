@@ -15,8 +15,25 @@ export function solidsOf(d) {
   const lot = [0, 0, W, D], p = d.pool;
   for (const r of rectMinus(lot, p ? [p.x, p.z, p.x + p.w, p.z + p.d] : null)) box(r[0], r[2], -3, 0, r[1], r[3]);
   if (p) box(p.x, p.x + p.w, -3, -p.depth, p.z, p.z + p.d);
-  // 地界：看不见的墙
-  box(-1, 0, -3, 8, -1, D + 1); box(W, W + 1, -3, 8, -1, D + 1); box(-1, W + 1, -3, 8, -1, 0); box(-1, W + 1, -3, 8, D, D + 1);
+  // 地界：看不见的墙（有围墙时，北边多一条街可以走：从街上推开大门进院子）
+  const st = d.site || {}, street = st.fence ? 7 : 0;
+  if (street) box(-3, W + 3, -3, 0, -street, 0);
+  box(-4, street ? -3 : 0, -3, 8, -street - 1, D + 1); box(street ? W + 3 : W, W + 4, -3, 8, -street - 1, D + 1); box(-4, W + 4, -3, 8, -street - 1, -street); box(-4, W + 4, -3, 8, D, D + 1);
+  // 围墙（大门处是门：关着是实心）、车、车棚柱
+  if (st.fence) {
+    const gates = st.gates || [];
+    for (const side of ['n', 's', 'w', 'e']) {
+      const len = side === 'n' || side === 's' ? W : D, xa = side === 'n' || side === 's', line = side === 'n' ? 0.1 : side === 's' ? D - 0.1 : side === 'w' ? 0.1 : W - 0.1;
+      const gs = gates.filter(q => q.side === side).map(q => [q.at - q.w / 2, q.at + q.w / 2, q.id]).sort((a, b) => a[0] - b[0]);
+      const put = (a, b, tag, h = 2.0) => xa ? box(a, b, 0, h, line - 0.2, line + 0.2, tag) : box(line - 0.2, line + 0.2, 0, h, a, b, tag);
+      let t = 0; for (const [a, b, id] of gs) { put(t, a); put(a - 0.2, a + 0.2, undefined, 2.2); put(b - 0.2, b + 0.2, undefined, 2.2); put(a + 0.2, b - 0.2, { door: id }, 1.8); t = b; } put(t, len);
+    }
+  }
+  if (st.parking) {
+    const q = st.parking, n = Math.max(1, Math.round(q.w / 3));
+    if (q.carport) for (const [x, z] of [[q.x + 0.1, q.z + 0.1], [q.x + q.w - 0.1, q.z + 0.1], [q.x + 0.1, q.z + q.d - 0.1], [q.x + q.w - 0.1, q.z + q.d - 0.1]]) box(x - 0.08, x + 0.08, 0, 2.6, z - 0.08, z + 0.08);
+    if (q.car) { const cx = q.x + (q.car - 0.5) * q.w / n, cz = q.z + q.d / 2 - 0.1; box(cx - 0.92, cx + 0.92, 0, 1.25, cz - 2.18, cz + 2.18); }
+  }
   // 一层地坪、二层楼板（楼梯洞挖空）、楼梯
   const gs = groundSlabOf(d); if (gs) for (const r of [gs.house, gs.terrace].filter(Boolean)) box(r[0], r[2], 0, F.slab0, r[1], r[3]);
   const b1 = slab1Of(d), half = F.col / 2;
@@ -72,6 +89,12 @@ export class Walker {
   spawn() {
     const d = this.d, b0 = bboxOf(d.walls.filter(w => w.floor === 0));
     let p = [d.lot.w / 2, Math.min(2, d.lot.d / 2)], face = [0, 1];
+    const gate = d.site && d.site.fence && (d.site.gates || []).find(q => q.side === 'n');
+    if (gate) {
+      const pk = d.site.parking, n = pk ? Math.max(1, Math.round(pk.w / 3)) : 1;
+      let x = gate.at; if (pk && pk.car) { const free = [...Array(n).keys()].map(i => pk.x + (i + 0.5) * pk.w / n).filter((c, i) => i + 1 !== pk.car && c > gate.at - gate.w / 2 && c < gate.at + gate.w / 2); if (free.length) x = free[0]; }
+      this.pos.set(x, 0, -3); this.yaw = Math.PI; this.pitch = -0.05; this.vel.set(0, 0, 0); return;
+    }
     if (b0) {
       for (const o of d.openings) {
         if (o.type !== 'door') continue; const w = d.walls.find(x => x.id === o.wall); if (!w || w.floor !== 0) continue;
@@ -93,15 +116,21 @@ export class Walker {
   // ───── 开门 ─────
   aimDoor() {
     const rc = new THREE.Raycaster(); rc.setFromCamera(new THREE.Vector2(0, 0), this.cam); rc.far = REACH;
-    const meshes = [...this.v.doors.values()].map(r => r.mesh), hit = rc.intersectObjects(meshes, false)[0];
-    if (hit) return hit.object.userData.door;
-    // 门已经开着、门扇转开了：看向门洞也算
+    const meshes = [...this.v.doors.values()].flatMap(r => r.targets || [r.mesh]), hit = rc.intersectObjects(meshes, false)[0];
+    if (hit) return hit.object.userData.door || hit.object.userData.win;
+    const dir = new THREE.Vector3(); this.cam.getWorldDirection(dir);
+    // 大门：站在门正前方 3.5 m 内、面朝大门就算
     for (const r of this.v.doors.values()) {
-      const w = this.d.walls.find(x => x.id === r.wall), o = r.op, L = wlen(w), c = new THREE.Vector3(w.a[0] + (w.b[0] - w.a[0]) * o.at / L, (w.floor ? this.d.floors[0].h : 0) + o.sill + Math.min(1.4, o.h - 0.3), w.a[1] + (w.b[1] - w.a[1]) * o.at / L);
-      const to = c.clone().sub(this.cam.position); if (to.length() > REACH) continue;
-      const dir = new THREE.Vector3(); this.cam.getWorldDirection(dir); if (to.normalize().dot(dir) > 0.93) return r.id;
+      if (r.kind !== 'gate' || !r.span) continue; const g = r.span, P = this.pos, u = g.xa ? P.x : P.z, v = g.xa ? P.z : P.x, dv = g.xa ? dir.z : dir.x, hl = Math.hypot(dir.x, dir.z) || 1;
+      if (u > g.a - 0.3 && u < g.b + 0.3 && Math.abs(v - g.line) < 3.5 && Math.sign(g.line - v) * dv / hl > 0.55) return r.id;
     }
-    return null;
+    // 门已经开着、门扇转开了：看向门洞中心也算（取最准的那个）
+    let best = null, bd = 0.93;
+    for (const r of this.v.doors.values()) {
+      const to = r.center.clone().sub(this.cam.position), dist = to.length(); if (dist > REACH + (r.kind === 'gate' ? 1.5 : 0)) continue;
+      const dt = to.normalize().dot(dir); if (dt > bd) { bd = dt; best = r.id; }
+    }
+    return best;
   }
   toggleDoor() {
     const id = this.aimDoor(); if (!id) return false;
@@ -110,7 +139,7 @@ export class Walker {
     if (!to && blk.some(s => p.x + R > s.x0 && p.x - R < s.x1 && p.z + R > s.z0 && p.z - R < s.z1)) return false; // 人站在门洞里，不关
     this.open[id] = !!to; blk.forEach(s => { s.off = !!to; });
     this.v.anims.push({ t0: performance.now(), dur: 380, fn: k => this.v.setDoor(id, from + (to - from) * k) });
-    this.hooks.onDoor && this.hooks.onDoor(id, !!to); return true;
+    this.hooks.onDoor && this.hooks.onDoor(id, !!to, r.kind); return true;
   }
   // ───── 物理 ─────
   hits(x, y, z) { for (const s of this.solids) if (!s.off && x + R > s.x0 && x - R < s.x1 && z + R > s.z0 && z - R < s.z1 && y + HEIGHT > s.y0 && y < s.y1) return s; return null; }
@@ -149,9 +178,11 @@ export class Walker {
   where() {
     const p = this.pos, h0 = this.d.floors[0].h, pool = this.d.pool, b0 = bboxOf(this.d.walls.filter(w => w.floor === 0));
     if (pool && p.y < -0.1 && p.x > pool.x && p.x < pool.x + pool.w && p.z > pool.z && p.z < pool.z + pool.d) return 'pool';
+    if (p.z < 0) return 'street';
     if (p.y > h0 - 0.3) return 'f2';
     if (b0 && p.x > b0[0] && p.x < b0[2] && p.z > b0[1] && p.z < b0[3]) return 'f1';
     return 'yard';
   }
+  kindOf(id) { const r = id && this.v.doors.get(id); return r ? r.kind : null; }
   state() { return { x: +this.pos.x.toFixed(3), y: +this.pos.y.toFixed(3), z: +this.pos.z.toFixed(3), yaw: +this.yaw.toFixed(3), pitch: +this.pitch.toFixed(3), where: this.where(), ground: this.ground, open: { ...this.open }, aim: this.aimDoor(), locked: !!this.locked }; }
 }

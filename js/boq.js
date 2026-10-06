@@ -16,6 +16,8 @@ export const FACTORS = [
   { key: 'slab1', v: 0.125, zh: '二层楼板 / 平屋面板 125 mm（示意）', en: '2nd-floor / flat roof slab 125 mm (illustrative)', src: null },
   { key: 'overhang', v: 0.6, zh: '屋檐出挑 0.6 m（示意）', en: 'Roof overhang 0.6 m (illustrative)', src: null },
   { key: 'terrace', v: 2.5, zh: '一层南侧露台 2.5 m 深（示意）', en: 'South terrace 2.5 m deep (illustrative)', src: null },
+  { key: 'fence', v: 1.8, zh: '围墙按地块周长减去大门宽度计延米（1.8 m 高 6 寸空心砖、两面抹灰，单价含基础、柱、压顶和人工）', en: 'Fence: lot perimeter minus gate widths, per linear metre (1.8 m CHB, plastered, footing/columns/coping/labour included)', src: A + 'chb-perimeter-fence-cost-philippines-2026/' },
+  { key: 'parking', v: 0.1, zh: '车位地坪 100 mm 混凝土 + 100 mm 碎石垫层（示意）；车棚按车位面积计', en: 'Parking pad 100 mm concrete on 100 mm base (illustrative); carport priced on the pad area', src: A + 'carport-steel-gate-fabrication-cost-philippines/' },
   { key: 'win', v: 1.44, zh: '窗按 1.2×1.2 m 标准窗折算樘数（面积 ÷ 1.44）', en: 'Windows counted as 1.2×1.2 m units (area ÷ 1.44)', src: null },
 ];
 export const F = Object.fromEntries(FACTORS.map(f => [f.key, f.v]));
@@ -94,10 +96,14 @@ export function boq(d, mats) {
     const p = d.pool, s = p.w * p.d + 2 * (p.w + p.d) * p.depth;
     concrete += s * F.poolShell; add(p.material, s); add('waterproof-pool', s); water = p.w * p.d * p.depth;
   }
+  // 院子：围墙、大门、车位与车棚
+  const st = d.site;
+  if (st && st.fence) { const gates = st.gates || []; add('fence-chb', 2 * (d.lot.w + d.lot.d) - gates.reduce((t, q) => t + q.w, 0)); for (const _ of gates) { add('gate-sliding', 1); add('gate-hardware', 1); } }
+  if (st && st.parking) { const a = st.parking.w * st.parking.d; concrete += a * F.parking; add('gravel-g1', a * F.parking); if (st.parking.carport) add('carport', a); }
   // 门窗
   for (const o of d.openings) { if (o.type === 'door') add('door-wood', 1); else add('window-alum', (o.w * o.h) / F.win); }
   add('concrete', concrete); add('rebar', concrete * F.rebar);
-  const order = ['concrete', 'rebar', 'gravel-g1', 'chb-4', 'chb-6', 'aac-100', 'cement', 'sand', 'roof-truss', 'gi-corrugated', 'longspan-05', 'clay-tile', 'concrete-tile', 'waterproof-roof', 'ceramic-tile', 'porcelain-tile', 'granite', 'laminate', 'pool-porcelain', 'pool-marble', 'pool-pebble', 'waterproof-pool', 'window-alum', 'door-wood', 'paint'];
+  const order = ['concrete', 'rebar', 'gravel-g1', 'chb-4', 'chb-6', 'aac-100', 'cement', 'sand', 'roof-truss', 'gi-corrugated', 'longspan-05', 'clay-tile', 'concrete-tile', 'waterproof-roof', 'ceramic-tile', 'porcelain-tile', 'granite', 'laminate', 'pool-porcelain', 'pool-marble', 'pool-pebble', 'waterproof-pool', 'fence-chb', 'gate-sliding', 'gate-hardware', 'carport', 'window-alum', 'door-wood', 'paint'];
   const lines = Object.entries(q).map(([id, v]) => {
     const m = M(id), qty = r2(v);
     return { material: id, qty, unit: m.unit, unitPrice: m.price ?? null, cost: m.price == null ? null : r2(qty * m.price) };
